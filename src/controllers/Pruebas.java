@@ -15,6 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import com.google.common.base.Defaults;
 
+import models.PlantUMLWriter;
+
 
 public class Pruebas {
 
@@ -42,7 +44,7 @@ public class Pruebas {
 /*	    	URLClassLoader loader = new URLClassLoader(new URL[] { new URL("https://github.com/irafa/pruebaurl/blob/master/klondikeJar.jar") });
 	    	Class<?> clss = loader.loadClass("Klondike");   */
 	    	
-	    	String raiz = "C:/Users/rarmesil/Desktop/TFG/Ejemplos/klondike/bin";
+/*	    	String raiz = "C:/Users/rarmesil/Desktop/TFG/Ejemplos/klondike/bin";
 			File classFile2= new File (raiz);
 			URL[] parentFolderPath={classFile2.toURI().toURL()};
 			URLClassLoader urlcl = new URLClassLoader(parentFolderPath);
@@ -57,7 +59,13 @@ public class Pruebas {
 			System.out.println("Atributos de la clase......................FIN");
 			
 			classPrueba.calculateRelationships();
-			classPrueba.pruebaPintarRelaciones();
+			classPrueba.pruebaPintarRelaciones();*/
+						
+			File directory = new File(String.valueOf("c:/Users/rarmesil/Desktop/TFG/Resultado/PlantUML"));
+			directory.mkdir();
+			PlantUMLWriter prueba = new PlantUMLWriter ("c:/Users/rarmesil/Desktop/TFG/Resultado/PlantUML/prueba.txt");
+			prueba.getPrintWriter().println("Prueba");
+			prueba.closePlantUMLFile();
 			
 			//relaciones de composición con método "getConstructors(); nada / con método getDeclaredConstructors() coge los parámetros, no lo definido con new en su interior"
 /*			Constructor<?> [] constructor = clss.getDeclaredConstructors();

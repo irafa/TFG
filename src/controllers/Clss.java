@@ -30,13 +30,13 @@ public class Clss {
 	public Clss (Class<?> clss, String packageName){
 		this.clss = clss;
 		this.packageName = packageName;
-		this.relationships = new HashMap<>();
+		this.relationships = new HashMap<String, Relationship>();
 	}
 	
 	/**
 	 * @return el objeto de tipo Class que representa esta clase
 	 */
-	public Class<?> getClss(){
+	public Class<?> getClazz(){
 		return this.clss;
 	}
 	
@@ -523,11 +523,43 @@ public class Clss {
 
 	/**
 	 * @param method: un método de la clase
+	 * @param diagramClasses: conjunto de clases de un diagrama de clases
+	 * 
 	 * @return true si el método se está sobreescribiendo y la clase abstracta que los declara 
 	 * pertenece al mismo paquete que esta clase, false en caso contrario.
 	 */
-	public boolean isMethodOverridden(Method method, Map <String, Clss> controllerDiagramClasses) {
-		Class<?> currentClass = this.getClss().getSuperclass();
+	public boolean isMethodOverridden(Method method, Map <String, Clss> diagramClasses) {
+		Class<?> currentClass = this.getClazz().getSuperclass();
+
+		boolean overwritten = false;
+		while (currentClass != Object.class 
+				&& currentClass != null
+				&& !overwritten) {
+			
+			try {
+				Method m = currentClass.getDeclaredMethod(method.getName(), method.getParameterTypes());
+				overwritten = true;
+				break;
+			} catch (NoSuchMethodException e) {
+				// El método no existe
+				
+			} catch (SecurityException e) {
+				// Security exception
+			}
+			currentClass = currentClass.getSuperclass();
+		}
+		// Comprobamos la pertenencia del metodo a una clase del 
+		// conjunto de clases del diagrama que estamos generando:
+		if (overwritten 
+				&& !diagramClasses.containsKey(currentClass.getName())){
+			overwritten = false;
+		}
+		return overwritten;
+	}
+	
+	
+/*	public boolean isMethodOverridden(Method method, Map <String, Clss> diagramClasses) {
+		Class<?> currentClass = this.getClazz().getSuperclass();
 
 		boolean overwritten = false;
 		while (currentClass != Object.class 
@@ -550,16 +582,17 @@ public class Clss {
 		// que estamos tratando o al conjunto de clases del diagrama de 
 		// clases del controlador que estamos tratando:
 		if (overwritten 
-				&& controllerDiagramClasses != null
-				&& !controllerDiagramClasses.containsKey(currentClass.getName())){
+				&& diagramClasses != null
+				&& !diagramClasses.containsKey(currentClass.getName())){
 			overwritten = false;
 		}else if (overwritten 
-				&& controllerDiagramClasses == null
-				&& !this.getClss().getPackage().getName().equals(currentClass.getPackage().getName())){
+				&& diagramClasses == null
+				&& !this.getClazz().getPackage().getName().equals(currentClass.getPackage().getName())){
 			overwritten = false;
 		}
 		return overwritten;
-	}
+	}*/
+	
 }
 
 // Código para identificar las relaciones de una clase mediante la instanciación

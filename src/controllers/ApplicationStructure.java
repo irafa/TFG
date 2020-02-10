@@ -4,11 +4,15 @@
 package controllers;
 
 import java.io.File;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
+import models.AdjustmentsManager;
+import models.DiagramAdjustments;
 import models.JavaApplicationReader;
+import models.PlantUMLWriter;
 import models.Relationship;
 
 /**
@@ -41,9 +45,10 @@ public class ApplicationStructure {
 		//Obtenemos un listado de las clases del directorio que recibimos como parámetro y las introducimos en la estructura de la aplicación
 		File[] classes = directory.listFiles(classesFilter);
 		if (classes.length > 0){
-			this.fillClasses(classes, directory.getName());
+			this.fillClasses(classes);
 		}else if (!directory.getName().equals("bin")){//Guardamos los paquetes que nos encontramos vacíos
-			this.emptyPackages.add(directory.getName());
+			String packageName = directory.getPath().substring(this.javaApplicationFile.getApplicationRootFile().getAbsolutePath().length() + 1);
+			this.emptyPackages.add(packageName.replace("\\", "."));
 		}
 		
 		//Obtenemos un listado de los directorios contenidos en el directorio que recibimos como parámetro
@@ -75,26 +80,26 @@ public class ApplicationStructure {
 	 * posteriormente calcula sus dependencias y las almacena en la estructura "structure".
 	 * 
 	 */
-	private void fillClasses(File[] classes, String directoryName) {
+	private void fillClasses(File[] classes) {
 		// Para cada clase encontrada en la aplicación Java:
 		for (int i = 0; i < classes.length; i++) {
 
 			// 1 - Cargamos la clase Java desde su fichero .class
 			// Calculamos la ruta a la clase Java desde la carpeta "bin"
-			// informada por el usuario
+			// informada por el usuario:
 			String classPath = classes[i].getAbsolutePath()
 					.substring(this.javaApplicationFile.getApplicationRootFile().getAbsolutePath().length() + 1);
 			classPath = classPath.substring(0, classPath.indexOf("."));
 			Class<?> clssFromFile = this.javaApplicationFile.getClassFromFile(classPath.replace("\\", "."));
 
-			// 2 - Instanciamos la clase Java en memoria
-			Clss clss = new Clss(clssFromFile, directoryName);
+			// 2 - Instanciamos la clase Java:
+			Clss clss = new Clss(clssFromFile, clssFromFile.getPackage().getName());
 
-			// 3 - Calculamos las dependencias de la clase.
+			// 3 - Calculamos las dependencias de la clase:
 			clss.calculateRelationships();
 
 			// 4 - Introducimos en la estructura de la aplicación el par
-			// "nombreClase" - "clss" (que la representa)
+			// "nombreClase" - "clss" (que la representa):
 			structure.put(clssFromFile.getName(), clss);
 		}
 	}
@@ -164,12 +169,11 @@ public class ApplicationStructure {
 		for (Map.Entry<String,Relationship> entry : relatedClasses.entrySet()){
 			//Recuperamos el nombre del paquete al que pertenece la clase relacionada:
 			String relatedPackageName = this.getPackage(entry.getKey());
-			//Comprobamos que la relación no sea de herencia y que el paquete 
-			//que la contiene sea distinto al recibido como parámetro en "packageName":
+			//Comprobamos que el paquete que la contiene sea distinto al 
+			//recibido como parámetro en "packageName":
 			if (relatedPackageName != null // La clase relacionada forma parte del proyecto
-					&& !entry.getValue().equals(Relationship.INHERITANCE) // La clase relacionada no lo esta por herencia
-					&& !entry.getValue().equals(Relationship.IMPLEMENTATION) // La clase relacionada no lo esta por implementación
-					&& !relatedPackageName.equals(packageName)){ // El paquete de la clase relacionada no es el mismo que el recibido por parámetro
+					&& !relatedPackageName.equals(packageName) // El paquete de la clase relacionada no es el mismo que el recibido por parámetro
+					&& !this.isRelatedPackage(relatedPackages, relatedPackageName)){
 				//Insertamos el nombre del paquete relacionado en el listado de paquetes relacionados que devolveremos:
 				relatedPackages.add(relatedPackageName);
 			}
@@ -177,6 +181,22 @@ public class ApplicationStructure {
 		return relatedPackages;
 	}
 	
+	/**
+	 * @param relatedPackages: listado de paquetes
+	 * @param relatedPackageName: nombre de un paquete 
+	 * @return true si el paquete recibido en el parámetro "relatedPackageName"
+	 * esta contenido en el listado recibido en el parámetro "relatedPackages"; 
+	 * se devuelve false en caso contrario.
+	 */
+	private boolean isRelatedPackage (ArrayList<String> relatedPackages, String relatedPackageName){
+		boolean isRelatedPackage = false;
+		for (String relatedPackage : relatedPackages){
+			if (relatedPackage.equals(relatedPackageName)){
+				return true;
+			}
+		}
+		return isRelatedPackage;
+	}
 	
 	/**
 	 * @param packageName: nombre de un paquete de la aplicación Java
@@ -226,11 +246,11 @@ public class ApplicationStructure {
 	 * @param packageName: Nombre de un paquete de una aplicación Java
 	 * @return listado de clases del paquete "packageName" pasado como parámetro.
 	 */
-	public ArrayList<Clss> getPackageClasses(String packageName){
-		ArrayList<Clss> packageClasses = new ArrayList<Clss>();
+	public Map <String, Clss> getPackageClasses(String packageName){
+		Map <String, Clss> packageClasses = new HashMap<String, Clss>();
 		for (Map.Entry<String,Clss> clssEntry : this.structure.entrySet()){
 			if (this.getPackage(clssEntry.getKey()).equals(packageName)){
-				packageClasses.add(clssEntry.getValue());
+				packageClasses.put(clssEntry.getKey(), clssEntry.getValue());
 			}
 		}
 		return packageClasses;
@@ -258,7 +278,7 @@ public class ApplicationStructure {
 	 * @return el objeto de tipo Clss correspondiente con la
 	 * clase cuyo nombre es el recibido en el parámetro "className".
 	 */
-	public Clss getClass (String className){
+	public Clss getClss (String className){
 		return this.structure.get(className);
 	}
 	
@@ -273,7 +293,7 @@ public class ApplicationStructure {
 	 */
 	public boolean existAssociationRelationship(String originClass, String destinationClass){
 		boolean exist = false;
-		Map<String, Relationship> classRelationships = this.getClass(originClass).getRelationships();
+		Map<String, Relationship> classRelationships = this.getClss(originClass).getRelationships();
 		for (Map.Entry<String, Relationship> relationship : classRelationships.entrySet()){
 			if ((relationship.getKey().equals(destinationClass) && relationship.getValue().equals(Relationship.ASSOCIATION)) 
 					|| (relationship.getKey().equals(destinationClass) && relationship.getValue().equals(Relationship.ASSOCIATION_MANY))){
@@ -292,24 +312,136 @@ public class ApplicationStructure {
 
 	
 	/**
-	 * @param controllerClassName: nombre de una clase controladora
-	 * @param applicationStructure: estructura de una palicación Java con la informacion de todas las clases que la componen.
-	 * @return mapa con la clase controladora, las clases que la consumen y las clases consumidas por esta.
+	 * @param principalClassName: nombre de una clase Java
+	 * @return mapa que contiene la clase Java recibida en el parámetro 
+	 * "principalClassName", las clases que la consumen y las clases consumidas por esta.
 	 */
-	public Map <String, Clss> getControllerStructure(String controllerClassName){
-		Map <String, Clss> controllerStructure = new HashMap<String, Clss>();
-		controllerStructure.put(controllerClassName, this.getClass(controllerClassName));
+	public Map <String, Clss> getContextClasses(String principalClassName){
+		Map <String, Clss> contextClasses = new HashMap<String, Clss>();
+		contextClasses.put(principalClassName, this.getClss(principalClassName));
 		
-		for (Map.Entry<String, Relationship> relationship : this.getClass(controllerClassName).getRelationships().entrySet()){
-			controllerStructure.put(relationship.getKey(), this.getClass(relationship.getKey()));
+		for (Map.Entry<String, Relationship> relationship : this.getClss(principalClassName).getRelationships().entrySet()){
+			if (this.isPartOfApplication(relationship.getKey())){
+				contextClasses.put(relationship.getKey(), this.getClss(relationship.getKey()));
+			}
 		}
 		
 		for (Map.Entry<String, Clss> clss : this.structure.entrySet()){
-			if (clss.getValue().isRelated(controllerClassName)){
-				controllerStructure.put(clss.getKey(), clss.getValue());
+			if (clss.getValue().isRelated(principalClassName)){
+				contextClasses.put(clss.getKey(), clss.getValue());
 			}
 		}
-		return controllerStructure;
+		return contextClasses;
 	}
 	
+	/**
+	 * @param className: nombre de una clase Java
+	 * @return mapa con las clases que consumen la clase recibida como parámetro,
+	 * a excepción de las clases que puedan implementar la clase recibida como 
+	 * parámetro.
+	 */
+	public Map <String, Clss> getClassCallers(String className){
+		Map <String, Clss> classCallers = new HashMap<String, Clss>();
+		
+		for (Map.Entry<String, Clss> clss : this.structure.entrySet()){
+			if (clss.getValue().isRelated(className) && !clss.getValue().isRelated(className, Relationship.IMPLEMENTATION)){
+				classCallers.put(clss.getKey(), clss.getValue());
+			}
+		}
+		return classCallers;
+	}
+	
+	
+	/**
+	 * @param className: nombre de una clase Java
+	 * @return mapa con las clases consumidas por la recibida como parámetro,
+	 * a excepción de las clases que puedan ser implementadas por la clase 
+	 * recibida como parámetro, y aquellas clases externas que no forman 
+	 * parte de la aplicación Java.
+	 */
+	public Map <String, Clss> getCalledClasses(String className){
+		Map <String, Clss> calledClasses = new HashMap<String, Clss>();
+		
+		for (Map.Entry<String, Relationship> relationship : this.getClss(className).getRelationships().entrySet()){
+			if (this.isPartOfApplication(relationship.getKey()) 
+					&& !relationship.getValue().equals(Relationship.IMPLEMENTATION)){
+				calledClasses.put(relationship.getKey(), this.getClss(relationship.getKey()));
+			}
+		}
+		return calledClasses;
+	}
+	
+	
+	/**
+	 * @param destinationPath: ruta a la carpeta destino donde se almacenan los ficheros PlantUML generados.
+	 * 
+	 * Identifica las clases controladoras de la aplicación, y genera el fichero PlantUML correspondiente 
+	 * a un diagrama de clases por cada una de ellas. Dichos diagramas contendrán todas
+	 * las clases que consumen el controlador y aquellas que son consumidas por el controlador.
+	 */
+	public void generatePlantUMLControllersClassDiagrams(String destinationPath, AdjustmentsManager adjustmentsManager){
+		for (Map.Entry<String, Clss> clss : this.structure.entrySet()){
+			if (!Modifier.isAbstract(clss.getValue().getClazz().getModifiers()) && clss.getKey().endsWith("Controller")){
+				String controllerClassDiagramName = clss.getValue().getClazz().getSimpleName() + "ClassDiagram";
+				PlantUMLWriter controllerClassDiagramFile = new PlantUMLWriter (destinationPath + "/PlantUML/ControllersClassDiagrams/" + controllerClassDiagramName + ".txt");
+				Map <String, Clss> controllerDiagramClasses = this.getContextClasses(clss.getKey());
+				DiagramAdjustments diagramAdjustments = adjustmentsManager.getDiagramAdjustments(controllerClassDiagramName);
+				controllerClassDiagramFile.generatePlantUMLClassDiagram(clss.getKey(), controllerDiagramClasses, this, diagramAdjustments);
+				controllerClassDiagramFile.closePlantUMLFile();
+			}
+		}
+	}
+
+	/**
+	 * @param destinationPath: ruta a la carpeta destino donde se almacenan los ficheros 
+	 * PlantUML generados.
+	 * 
+	 * Genera la estructura de carpetas con los ficheros PlantUML
+	 * correspondientes a los diagramas de clases de los distintos paquetes
+	 * de la aplicación Java.
+	 */
+	/**
+	 * @param destinationPath
+	 */
+	public void generatePackagePlantUMLClassDiagrams(String destinationPath, AdjustmentsManager adjustmentsManager) {
+		ArrayList<String> applicationPackages = this.getApplicationPackages();
+		for (String packageName : applicationPackages){
+			Map <String, Clss> packageClasses = this.getPackageClasses(packageName);
+			String packagePath = packageName.replace(".", "/");
+			String packageSimpleName = packageName.substring(packageName.lastIndexOf(".") + 1, packageName.length());
+			
+			// Creamos la estructura de carpetas del paquete
+			File packageClassDiagramsDirectory = new File(String.valueOf(destinationPath + "/PlantUML/" + packagePath));
+			packageClassDiagramsDirectory.getParentFile().mkdirs();
+			packageClassDiagramsDirectory.mkdir();
+			
+			// Generamos el diagrama de clases del paquete
+			String packageClassDiagramName = packageSimpleName + "PackageClassDiagram";
+			PlantUMLWriter packageClassDiagramFile = new PlantUMLWriter (destinationPath + "/PlantUML/" + packagePath + "/" + packageClassDiagramName + ".txt");
+			DiagramAdjustments packageClassDiagramAdjustments = adjustmentsManager.getDiagramAdjustments(packageClassDiagramName);
+			packageClassDiagramFile.generatePlantUMLClassDiagram(null, packageClasses, this, packageClassDiagramAdjustments);
+			packageClassDiagramFile.closePlantUMLFile();
+			
+			// Generamos el diagrama de contexto del paquete
+			String contextPackageDiagramName = packageSimpleName + "ContextPackageDiagram";
+			PlantUMLWriter contextPackageDiagramFile = new PlantUMLWriter (destinationPath + "/PlantUML/" + packagePath + "/" + contextPackageDiagramName + ".txt");
+			Map <String, Clss> contextPackageDiagramClasses = new HashMap<String, Clss>();
+			for (Map.Entry<String, Clss> packageClass : packageClasses.entrySet()){
+				contextPackageDiagramClasses.putAll(this.getContextClasses(packageClass.getKey()));
+			}
+			DiagramAdjustments contextPackageDiagramAdjustments = adjustmentsManager.getDiagramAdjustments(contextPackageDiagramName);
+			contextPackageDiagramFile.generatePlantUMLClassDiagram(null, contextPackageDiagramClasses, this, contextPackageDiagramAdjustments);
+			contextPackageDiagramFile.closePlantUMLFile();
+			
+			// Generamos los diagramas de contexto de las classes contenidas en el paquete
+			for (Map.Entry<String, Clss> clss : this.getPackageClasses(packageName).entrySet()){
+				String contextClassDiagramName= clss.getValue().getClazz().getSimpleName() + "ContextClassDiagram";
+				PlantUMLWriter contextClassDiagramFile = new PlantUMLWriter (destinationPath + "/PlantUML/" + packagePath + "/" + contextClassDiagramName + ".txt");
+				DiagramAdjustments contextClassDiagramAdjustments = adjustmentsManager.getDiagramAdjustments(contextClassDiagramName);
+				contextClassDiagramFile.generatePlantUMLContextClassDiagram(clss.getValue().getClazz().getName(), this, contextClassDiagramAdjustments);
+				contextClassDiagramFile.closePlantUMLFile();
+				
+			}
+		}
+	}
 }
